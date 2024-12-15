@@ -210,6 +210,45 @@ function handleAddresses($action, $input, $conn) {
                 echo json_encode(['status' => 'error', 'message' => 'No districts found for the selected city.']);
             }
             break;
+        case 'getDistrictsByName':
+            $city_name = $input['city_name']; // Şehir adı alındı
+
+            // Şehir adı ile ilçeleri sorgula
+            $stmt = $conn->prepare("
+        SELECT d.district_id, d.name 
+        FROM district d
+        JOIN city c ON d.city_id = c.city_id
+        WHERE c.name = ?");  // Şehir adı ile ilçeleri filtrele
+            $stmt->bind_param("s", $city_name);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            if ($result->num_rows > 0) {
+                $districts = [];
+                while ($row = $result->fetch_assoc()) {
+                    $districts[] = $row;
+                }
+                echo json_encode(['status' => 'success', 'districts' => $districts]);
+            } else {
+                echo json_encode(['status' => 'error', 'message' => 'No districts found for the selected city.']);
+            }
+            break;
+        case 'getAddressById': // Yeni case: ID ile adresi getir
+            $id = $input['id'];
+
+            // Veritabanından ID'ye göre adresi al
+            $stmt = $conn->prepare("SELECT * FROM addresses WHERE id = ?");
+            $stmt->bind_param("i", $id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            if ($result->num_rows > 0) {
+                echo json_encode(['status' => 'success', 'address' => $result->fetch_assoc()]);
+            } else {
+                echo json_encode(['status' => 'error', 'message' => 'Address not found.']);
+            }
+            break;
+
         default:
             echo json_encode(["message" => "Invalid action."]);
             break;
@@ -254,7 +293,26 @@ function handleOrders($action, $input, $conn) {
 
             echo json_encode(["message" => "Order added successfully.", "order_id" => $order_id]);
             break;
+        case 'read_detail':
+            $order_id = $input['order_id'];
 
+            // Sipariş detaylarını çekmek için sorgu
+            $stmt = $conn->prepare("
+                SELECT 
+                    p.name, 
+                    od.quantity, 
+                    od.price 
+                FROM order_items od
+                LEFT JOIN products p ON od.product_id = p.id
+                WHERE od.order_id = ?
+            ");
+            $stmt->bind_param("i", $order_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            // Sonuçları döndür
+            echo json_encode($result->fetch_all(MYSQLI_ASSOC));
+            break;
         case 'read':
             $user_id = $input['user_id'];
             $result = $conn->query("SELECT * FROM orders WHERE user_id = $user_id");
