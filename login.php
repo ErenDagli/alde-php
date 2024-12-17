@@ -29,17 +29,25 @@ $result = $conn->query($sql);
 if ($result->num_rows > 0) {
     $row = $result->fetch_assoc();
     // Şifre doğrulaması
-    if (password_verify($pass, $row['password'])) {
-        // Başarılı giriş
+    if ($row['is_active'] != 1) {
+        // Hesap aktif değilse
         echo json_encode([
-            "message" => "Login successful",
-            "status" => "success",
-            "userId" => $row['id'], // Kullanıcının ID'si
-            "username" => $row['username'] // Kullanıcının kullanıcı adı
+            "message" => "Account is not active. Please verify your account.",
+            "status" => "inactive"
         ]);
     } else {
-        // Şifre hatası
-        echo json_encode(["message" => "Invalid password", "status" => "error"]);
+        if (password_verify($pass, $row['password'])) {
+            // Başarılı giriş
+            echo json_encode([
+                "message" => "Login successful",
+                "status" => "success",
+                "userId" => $row['id'], // Kullanıcının ID'si
+                "username" => $row['username'] // Kullanıcının kullanıcı adı
+            ]);
+        } else {
+            // Şifre hatası
+            echo json_encode(["message" => "Invalid password", "status" => "error"]);
+        }
     }
 } else {
     // Kullanıcı bulunamadı

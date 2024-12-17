@@ -44,6 +44,8 @@ if (isset($input['action'])) {
                 handleChangePassword($input, $conn);
             } elseif ($action === 'forgot_password') {
                 handleForgotPassword($input, $conn);
+            } elseif ($action === 'verification') {
+                handleVerification($input, $conn);
             }
             break;
         default:
@@ -84,9 +86,26 @@ function handleFavorites($action, $input, $conn) {
             break;
         case 'read':
             $user_id = $input['user_id'];
-            $result = $conn->query("SELECT * FROM favorites WHERE user_id = $user_id");
+
+            // Favori ürünleri products tablosu ile birleştirip alın
+            $stmt = $conn->prepare("SELECT 
+            f.id AS favorite_id, 
+            p.id AS product_id, 
+            p.name AS product_name, 
+            p.price AS product_price, 
+            p.description AS product_description
+        FROM favorites as f JOIN products as p ON f.product_id = p.id 
+        WHERE 
+            f.user_id = ?
+    ");
+            $stmt->bind_param("i", $user_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            // Sonuçları JSON formatında döndür
             echo json_encode($result->fetch_all(MYSQLI_ASSOC));
             break;
+
         case 'delete':
             $id = $input['id'];
             $stmt = $conn->prepare("DELETE FROM favorites WHERE id = ?");
@@ -395,6 +414,38 @@ function handleForgotPassword($input, $conn) {
         echo json_encode(["message" => "A temporary password has been sent to your email address."]);
     } else {
         echo json_encode(["error" => "Email address not found."]);
+    }
+}
+/**
+ * Hesabı doğrulama ve aktif etme fonksiyonu
+ */
+function handleVerification($input, $conn) {
+    $userId = $input['userId'];
+    $verificationCode = $input['verificationCode'];
+
+    $stmt = $conn->prepare("SELECT id, verification_code, is_active FROM users WHERE id = ? AND verification_code = ?");
+    $stmt->bind_param("is", $userId, $verificationCode);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $user = $result->fetch_assoc();
+
+    if ($user) {
+        if ($user['is_active'] == 1) {
+            // Kullanıcı zaten aktif
+            echo json_encode(["message" => "Account is already active.", "status" => "error"]);
+        } else {
+            // Kullanıcıyı aktif hale getir
+            $update_stmt = $conn->prepare("UPDATE users SET is_active = 1 WHERE id = ?");
+            $update_stmt->bind_param("i", $userId);
+            if ($update_stmt->execute()) {
+                echo json_encode(["message" => "Account has been activated successfully.", "status" => "success"]);
+            } else {
+                echo json_encode(["message" => "Failed to activate account.", "status" => "error"]);
+            }
+        }
+    } else {
+        // Kullanıcı bulunamazsa
+        echo json_encode(["message" => "Invalid user ID or verification code.", "status" => "error"]);
     }
 }
 
