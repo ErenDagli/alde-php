@@ -10,7 +10,6 @@ require 'vendor/iyzipay/IyzipayBootstrap.php';
 IyzipayBootstrap::init();
 
 
-use Iyzipay\Model\ThreedsInitialize;
 use Iyzipay\Model\Payment;
 use Iyzipay\Request\CreatePaymentRequest;
 use Iyzipay\Model\BasketItem;
@@ -99,8 +98,6 @@ foreach ($data["basketItems"] as $item) {
     $basketItem->setPrice($item["price"]);
     $basketItems[] = $basketItem;
 }
-if($shippingCost != 0) {
-
 $basketItemShipping = new BasketItem();
 $basketItemShipping->setId("SHIPPING");
 $basketItemShipping->setName("Shipping Fee");
@@ -108,20 +105,22 @@ $basketItemShipping->setCategory1("Shipping");
 $basketItemShipping->setItemType("PHYSICAL");
 $basketItemShipping->setPrice($shippingCost);
 $basketItems[] = $basketItemShipping;
-
-}
 $request->setBasketItems($basketItems);
 
-$request->setCallbackUrl("http://192.168.1.13/callback.php");
 error_log(print_r($request, true)); // Gelen JSON verisini log'a yazdırır
 // Ödeme talebi gönder
-//$payment = Payment::create($request, $options);
-$response = ThreedsInitialize::create($request, $options);
+$payment = Payment::create($request, $options);
 
-// Yanıt kontrolü
-if ($response->getStatus() === "success") {
-    // HTML form içeriği
-    echo $response->getHtmlContent(); // Kullanıcıyı doğrulama ekranına yönlendir
+// Yanıtı kontrol et
+if ($payment->getStatus() === "success") {
+    echo json_encode([
+        "status" => "success",
+        "message" => "Ödeme başarılı",
+        "paymentId" => $payment->getPaymentId(),
+    ]);
 } else {
-    echo "Hata: " . $response->getErrorMessage();
+    echo json_encode([
+        "status" => "failure",
+        "message" => $payment->getErrorMessage(),
+    ]);
 }

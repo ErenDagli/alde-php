@@ -58,7 +58,7 @@ switch ($action) {
     // 2. Sepeti listeleme
     case "view_cart":
         $userId = $data['user_id'];
-        $sql = "SELECT c.id as cart_id, p.id as product_id, p.name, p.price, c.quantity 
+        $sql = "SELECT c.id as cart_id, p.id as product_id, p.name, p.price, c.quantity, p.image_path 
                 FROM cart c 
                 JOIN products p ON c.product_id = p.id 
                 WHERE c.user_id = $userId";

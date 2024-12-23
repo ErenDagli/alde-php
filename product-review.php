@@ -34,7 +34,7 @@ if (isset($input['action'])) {
 
         case 'read':
             $product_id = $input['product_id'];
-            $result = $conn->query("SELECT product_reviews.*, users.username 
+            $result = $conn->query("SELECT product_reviews.*, users.name, users.surname 
                                     FROM product_reviews 
                                     JOIN users ON product_reviews.user_id = users.id 
                                     WHERE product_reviews.product_id = $product_id");
