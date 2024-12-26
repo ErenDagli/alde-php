@@ -23,37 +23,46 @@ $action = isset($_POST['action']) ? $_POST['action'] : ($input['action'] ?? null
 if ($action) {
     switch ($action) {
         case 'create':
-            $name = $_POST['name'];
-            $description = $_POST['description'];
-            $price = $_POST['price'];
-            $category_id = $_POST['category_id'];
+        $name = $_POST['name'];
+        $description = $_POST['description'];
+        $price = $_POST['price'];
+        $category_id = $_POST['category_id'];
 
-            // Dosya yükleme işlemi
-            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                $uploadDir = __DIR__ . '/uploads/';
-                if (!is_dir($uploadDir)) {
-                    mkdir($uploadDir, 0777, true);
-                }
+        // Dosyaları yüklemek için diziyi hazırlıyoruz
+        $imagePaths = [];
 
-                $fileTmpPath = $_FILES['image']['tmp_name'];
-                $fileName = basename($_FILES['image']['name']);
+        if (isset($_FILES['images']) && $_FILES['images']['error'][0] === UPLOAD_ERR_OK) {
+            $uploadDir = __DIR__ . '/uploads/';
+
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+
+            // Çoklu dosya yüklemesi yapıyoruz
+            foreach ($_FILES['images']['tmp_name'] as $key => $tmpName) {
+                $fileName = basename($_FILES['images']['name'][$key]);
                 $uploadFilePath = $uploadDir . $fileName;
 
-                if (move_uploaded_file($fileTmpPath, $uploadFilePath)) {
-                    $imagePath = $uploadFilePath;
+                // Dosyayı yükle
+                if (move_uploaded_file($tmpName, $uploadFilePath)) {
+                    $imagePaths[] = $uploadFilePath; // Yüklenen dosya yolunu diziye ekle
                 } else {
                     echo json_encode(["message" => "Resim yüklenirken hata oluştu."]);
                     exit;
                 }
-            } else {
-                $imagePath = NULL;
             }
+        }
 
-            $stmt = $conn->prepare("INSERT INTO products (name, description, price, category_id, image_path) VALUES (?, ?, ?, ?, ?)");
-            $stmt->bind_param("ssdis", $name, $description, $price, $category_id, $imagePath);
-            $stmt->execute();
-            echo json_encode(["message" => "Ürün başarıyla eklendi."]);
-            break;
+        // Eğer resimler yüklendiyse, dosya yollarını virgülle ayırarak sakla
+        $imagePathsString = !empty($imagePaths) ? implode(',', $imagePaths) : NULL;
+
+        // Veritabanına ürün bilgilerini ekle
+        $stmt = $conn->prepare("INSERT INTO products (name, description, price, category_id, image_path) VALUES (?, ?, ?, ?, ?)");
+        $stmt->bind_param("ssdis", $name, $description, $price, $category_id, $imagePathsString);
+        $stmt->execute();
+
+        echo json_encode(["message" => "Ürün başarıyla eklendi."]);
+        break;
 
         case 'create_bulk':
             $products = $input['products'];
@@ -97,7 +106,7 @@ if ($action) {
         LEFT JOIN categories ON products.category_id = categories.id
         LEFT JOIN product_reviews ON products.id = product_reviews.product_id
         WHERE products.category_id = ? 
-        AND categories.is_deleted = 0
+        AND categories.is_deleted = 0 AND products.is_deleted = 0
         GROUP BY products.id
     ");
             $stmt->bind_param("i", $category_id);
@@ -115,44 +124,83 @@ if ($action) {
             break;
 
         case 'update':
-            $id = $input['id'];
-            $name = $input['name'];
-            $description = $input['description'];
-            $price = $input['price'];
-            $category_id = $input['category_id'];
+            $id = $_POST['id'];
+            $name = $_POST['name'];
+            $description = $_POST['description'];
+            $price = $_POST['price'];
+            $category_id = $_POST['category_id'];
 
-            if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            // Yeni görseller için dizi
+            $newImagePaths = [];
+
+            // Mevcut görselleri al (existing_images[])
+            $existingImages = isset($_POST['existing_images']) ? json_decode($_POST['existing_images'], true) : [];
+
+            // Eğer yeni görseller yüklendiyse
+            if (isset($_FILES['images']) && $_FILES['images']['error'][0] === UPLOAD_ERR_OK) {
                 $uploadDir = __DIR__ . '/uploads/';
                 if (!is_dir($uploadDir)) {
                     mkdir($uploadDir, 0777, true);
                 }
 
-                $fileTmpPath = $_FILES['image']['tmp_name'];
-                $fileName = basename($_FILES['image']['name']);
-                $uploadFilePath = $uploadDir . $fileName;
+                // Çoklu dosya yüklemesi
+                foreach ($_FILES['images']['tmp_name'] as $key => $tmpName) {
+                    $fileName = basename($_FILES['images']['name'][$key]);
+                    $uploadFilePath = $uploadDir . $fileName;
 
-                if (move_uploaded_file($fileTmpPath, $uploadFilePath)) {
-                    $imagePath = $uploadFilePath;
-                } else {
-                    echo json_encode(["message" => "Resim yüklenirken hata oluştu."]);
-                    exit;
+                    // Dosyayı yükle
+                    if (move_uploaded_file($tmpName, $uploadFilePath)) {
+                        $newImagePaths[] = $uploadFilePath; // Yeni yüklenen dosya yolunu ekle
+                    } else {
+                        echo json_encode(["message" => "Resim yüklenirken hata oluştu."]);
+                        exit;
+                    }
                 }
-            } else {
-                $imagePath = NULL;
             }
 
+            // Yeni görseller ve mevcut görselleri birleştir
+            $allImages = array_merge($existingImages, $newImagePaths);
+            // Görselleri virgülle ayırarak kaydediyoruz
+            $imagePathsString = !empty($allImages) ? implode(',', $allImages) : NULL;
+
+            // Eğer image_path boşsa, yeni görselleri direkt kaydediyoruz
+            if (empty($imagePathsString)) {
+                $imagePathsString = NULL; // Eğer hiçbir görsel yoksa NULL yap
+            }
+
+            // Ürün bilgilerini ve yeni görselleri güncelle
             $stmt = $conn->prepare("UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, image_path = ? WHERE id = ?");
-            $stmt->bind_param("ssdisi", $name, $description, $price, $category_id, $imagePath, $id);
+            $stmt->bind_param("ssdisi", $name, $description, $price, $category_id, $imagePathsString, $id);
             $stmt->execute();
+
             echo json_encode(["message" => "Ürün başarıyla güncellendi."]);
             break;
 
+
         case 'delete':
             $id = $input['id'];
-            $stmt = $conn->prepare("DELETE FROM products WHERE id = ?");
+
+            // Öncelikle ürünün mevcut durumunu kontrol et
+            $stmt = $conn->prepare("SELECT is_deleted FROM products WHERE id = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
-            echo json_encode(["message" => "Ürün başarıyla silindi."]);
+            $stmt->store_result();  // Sonuçları bellek içi tut
+            $stmt->bind_result($is_deleted);
+            $stmt->fetch();
+
+            if ($is_deleted == 1) {
+                // Eğer ürün silinmişse (is_deleted = 1), aktif yapıyoruz
+                $stmt = $conn->prepare("UPDATE products SET is_deleted = 0 WHERE id = ?");
+                $stmt->bind_param("i", $id);
+                $stmt->execute();
+                echo json_encode(["message" => "Ürün başarıyla aktif hale getirildi."]);
+            } else {
+                // Eğer ürün aktifse (is_deleted = 0), siliyoruz (is_deleted = 1 yapıyoruz)
+                $stmt = $conn->prepare("UPDATE products SET is_deleted = 1 WHERE id = ?");
+                $stmt->bind_param("i", $id);
+                $stmt->execute();
+                echo json_encode(["message" => "Ürün başarıyla silindi."]);
+            }
             break;
 
         default:
