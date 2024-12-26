@@ -332,9 +332,52 @@ function handleOrders($action, $input, $conn) {
             // Sonuçları döndür
             echo json_encode($result->fetch_all(MYSQLI_ASSOC));
             break;
+        case 'update':
+            $order_id = $input['order_id'];
+            $status = $input['status'];
+            $shipment_id = $input['shipment_id'];
+
+            // Update the order status and shipment ID
+            $stmt = $conn->prepare("
+        UPDATE orders 
+        SET order_status = ?, shipping_id = ? 
+        WHERE id = ?
+    ");
+            $stmt->bind_param("ssi", $status, $shipment_id, $order_id);
+
+            if ($stmt->execute()) {
+                echo json_encode(["success" => true, "message" => "Order updated successfully."]);
+            } else {
+                echo json_encode(["success" => false, "message" => "Failed to update order."]);
+            }
+            break;
         case 'read':
             $user_id = $input['user_id'];
             $result = $conn->query("SELECT * FROM orders WHERE user_id = $user_id");
+            echo json_encode($result->fetch_all(MYSQLI_ASSOC));
+            break;
+        case 'read_all':
+            // Bütün siparişleri, kullanıcı ve sipariş içeriği ile birleştir
+            $stmt = $conn->prepare("
+                SELECT 
+                    o.id AS order_id, 
+                    o.order_date, 
+                    o.total_price, 
+                    o.order_status, 
+                    o.shipping_id,
+                    u.name AS customer_name, 
+                    u.surname AS customer_surname,
+                    GROUP_CONCAT(CONCAT(oi.quantity, ' x ', p.name) SEPARATOR ', ') AS products
+                FROM orders o
+                LEFT JOIN users u ON o.user_id = u.id
+                LEFT JOIN order_items oi ON o.id = oi.order_id
+                LEFT JOIN products p ON oi.product_id = p.id
+                GROUP BY o.id, u.name
+            ");
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            // Sonuçları döndür
             echo json_encode($result->fetch_all(MYSQLI_ASSOC));
             break;
 
