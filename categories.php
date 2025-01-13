@@ -30,7 +30,7 @@ if (isset($input['action'])) {
             break;
 
         case 'read_all':
-            $result = $conn->query("SELECT * FROM categories WHERE is_deleted = 0");
+            $result = $conn->query("SELECT * FROM categories WHERE is_deleted = 0 ORDER BY CAST(SUBSTRING_INDEX(name, '.', 1) AS UNSIGNED), name");
             $categories = $result->fetch_all(MYSQLI_ASSOC);
             echo json_encode($categories);
             break;

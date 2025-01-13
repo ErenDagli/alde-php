@@ -96,20 +96,39 @@ if ($action) {
             break;
         case 'read_by_category':
             $category_id = $input['category_id'];
-            $stmt = $conn->prepare("
-        SELECT 
-            products.*, 
-            categories.name AS category_name,
-            COUNT(product_reviews.id) AS review_count,
-            AVG(product_reviews.rating) AS average_rating
-        FROM products
-        LEFT JOIN categories ON products.category_id = categories.id
-        LEFT JOIN product_reviews ON products.id = product_reviews.product_id
-        WHERE products.category_id = ? 
-        AND categories.is_deleted = 0 AND products.is_deleted = 0
-        GROUP BY products.id
-    ");
-            $stmt->bind_param("i", $category_id);
+            if ($category_id == -1) {
+                // Son eklenen 15 ürünü getiren sorgu
+                $stmt = $conn->prepare("
+            SELECT 
+                products.*, 
+                categories.name AS category_name,
+                COUNT(product_reviews.id) AS review_count,
+                AVG(product_reviews.rating) AS average_rating
+            FROM products
+            LEFT JOIN categories ON products.category_id = categories.id
+            LEFT JOIN product_reviews ON products.id = product_reviews.product_id
+            WHERE categories.is_deleted = 0 AND products.is_deleted = 0
+            GROUP BY products.id
+            ORDER BY products.id DESC
+            LIMIT 15
+        ");
+            } else {
+                // Belirli bir kategoriye göre ürünleri getiren sorgu
+                $stmt = $conn->prepare("
+            SELECT 
+                products.*, 
+                categories.name AS category_name,
+                COUNT(product_reviews.id) AS review_count,
+                AVG(product_reviews.rating) AS average_rating
+            FROM products
+            LEFT JOIN categories ON products.category_id = categories.id
+            LEFT JOIN product_reviews ON products.id = product_reviews.product_id
+            WHERE products.category_id = ? 
+            AND categories.is_deleted = 0 AND products.is_deleted = 0
+            GROUP BY products.id
+        ");
+                $stmt->bind_param("i", $category_id);
+            }
             $stmt->execute();
             $result = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
             echo json_encode($result);

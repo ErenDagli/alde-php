@@ -46,6 +46,10 @@ if (isset($input['action'])) {
                 handleForgotPassword($input, $conn);
             } elseif ($action === 'verification') {
                 handleVerification($input, $conn);
+            } elseif ($action === 'get_me') {
+                handleGetMe($input, $conn);
+            } elseif ($action === 'update_me') {
+                handleUpdateMe($input, $conn);
             }
             break;
         default:
@@ -93,7 +97,8 @@ function handleFavorites($action, $input, $conn) {
             p.id AS product_id, 
             p.name AS product_name, 
             p.price AS product_price, 
-            p.description AS product_description
+            p.description AS product_description,
+            p.image_path AS product_image_path
         FROM favorites as f JOIN products as p ON f.product_id = p.id 
         WHERE 
             f.user_id = ?
@@ -107,8 +112,8 @@ function handleFavorites($action, $input, $conn) {
             break;
 
         case 'delete':
-            $id = $input['id'];
-            $stmt = $conn->prepare("DELETE FROM favorites WHERE id = ?");
+            $id = $input['product_id'];
+            $stmt = $conn->prepare("DELETE FROM favorites WHERE product_id = ?");
             $stmt->bind_param("i", $id);
             $stmt->execute();
             echo json_encode(["message" => "Favorite deleted successfully."]);
@@ -489,6 +494,83 @@ function handleVerification($input, $conn) {
     } else {
         // Kullanıcı bulunamazsa
         echo json_encode(["message" => "Invalid user ID or verification code.", "status" => "error"]);
+    }
+}
+
+/**
+ * Hesap sahibinin bilgileri
+ */
+function handleGetMe($input, $conn) {
+    $userId = $input['userId'];
+
+    // Sadece gerekli alanları seçiyoruz: ad, soyad, telefon, eposta, cinsiyet
+    $stmt = $conn->prepare("SELECT name, surname, phone_number, email, gender FROM users WHERE id = ?");
+    $stmt->bind_param("i", $userId); // sadece tamsayı olduğu için "i" kullanılır
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $user = $result->fetch_assoc();
+
+    if ($user) {
+        // Kullanıcı bilgilerini döndür
+        echo json_encode([
+            "message" => "User details retrieved successfully.",
+            "status" => "success",
+            "user" => $user // Yalnızca gerekli alanlar döndürülür
+        ]);
+    } else {
+        // Kullanıcı bulunamazsa
+        echo json_encode([
+            "message" => "Invalid user ID.",
+            "status" => "error"
+        ]);
+    }
+}
+function handleUpdateMe($input, $conn)
+{
+    // JSON verisini al ve dizi olarak decode et
+    $data = json_decode(file_get_contents('php://input'), true);
+
+    // Gelen verileri kontrol et
+    if (!isset($data['module'], $data['action'], $data['userId'], $data['name'], $data['surname'], $data['phone_number'], $data['email'], $data['gender'])) {
+        echo json_encode([
+            "message" => "Invalid input data",
+            "status" => "error"
+        ]);
+        exit;
+    }
+
+    // Verilerin doğruluğunu kontrol et
+    if ($data['module'] !== "users" || $data['action'] !== "update_me") {
+        echo json_encode([
+            "message" => "Invalid module or action",
+            "status" => "error"
+        ]);
+        exit;
+    }
+
+    // Verileri değişkenlere ata
+    $userId = $data['userId'];
+    $name = $data['name'];
+    $surname = $data['surname'];
+    $phone_number = $data['phone_number'];
+    $email = $data['email'];
+    $gender = $data['gender'];
+
+    // Kullanıcı bilgilerini güncellemek için SQL sorgusu
+    $stmt = $conn->prepare("UPDATE users SET name = ?, surname = ?, phone_number = ?, email = ?, gender = ? WHERE id = ?");
+    $stmt->bind_param("sssssi", $name, $surname, $phone_number, $email, $gender, $userId);
+    $stmt->execute();
+
+    if ($stmt->affected_rows > 0) {
+        echo json_encode([
+            "message" => "User details updated successfully.",
+            "status" => "success"
+        ]);
+    } else {
+        echo json_encode([
+            "message" => "No changes made or invalid user ID.",
+            "status" => "error"
+        ]);
     }
 }
 

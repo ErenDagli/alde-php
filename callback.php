@@ -29,6 +29,7 @@ $response = ThreedsPayment::create($request, $options);
 
 // Yanıt kontrolü
 if ($response->getStatus() === "success") {
+    error_log(print_r($response, true));
     echo "Ödeme başarılı!";
 } else {
     echo "Hata: " . $response->getErrorMessage();
